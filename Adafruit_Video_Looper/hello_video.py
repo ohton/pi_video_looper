@@ -28,7 +28,7 @@ class HelloVideoPlayer:
         """Play the provided movied file, optionally looping it repeatedly."""
         self.stop(3)  # Up to 3 second delay to let the old player stop.
         # Assemble list of arguments.
-        args = ['hello_video.bin']
+        args = ['/usr/local/bin/hello_video.bin']
         if loop is None:
             loop = movie.repeats
         if loop <= -1:
