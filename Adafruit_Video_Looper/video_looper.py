@@ -62,6 +62,8 @@ class VideoLooper:
         self._play_on_startup = self._config.getboolean('video_looper', 'play_on_startup', fallback=True)
         self._resume_playlist = self._config.getboolean('video_looper', 'resume_playlist', fallback=False)
         self._playlist_path = self._config.get('playlist', 'path', fallback='')
+        # If true, include and expand nested .m3u files into a single flat playlist
+        self._flatten_nested_m3u = self._config.getboolean('playlist', 'flatten_nested_m3u', fallback=False)
         self._keyboard_control = self._config.getboolean('control', 'keyboard_control')
         self._keyboard_control_disabled_while_playback = self._config.getboolean('control', 'keyboard_control_disabled_while_playback')
         self._gpio_control_disabled_while_playback = self._config.getboolean('control', 'gpio_control_disabled_while_playback')
@@ -254,6 +256,19 @@ class VideoLooper:
                     path = urllib.parse.unquote(line.rstrip())
                     if not os.path.isabs(path):
                         path = os.path.join(playlist_dirname, path)
+
+                    # If this entry is itself an m3u and flattening is enabled, recursively expand
+                    base, ext = os.path.splitext(path)
+                    if self._flatten_nested_m3u and ext.lower() in ('.m3u', '.m3u8') and os.path.isfile(path):
+                        try:
+                            child_playlist = self._build_playlist_m3u(path)
+                            # extend flat movies list with child movies
+                            movies.extend(child_playlist._movies)
+                        except Exception:
+                            # fallback: treat as a normal entry if something goes wrong
+                            pass
+                        title = None
+                        continue
 
                     # Determine repeat setting from the filename (support _repeat_Nx like directory scanning)
                     filename = os.path.basename(path)
@@ -505,9 +520,19 @@ class VideoLooper:
                     self.quit(True)
                 if event.key == pygame.K_b:
                     self._print("b was pressed. jumping back...")
-                    self._playlist.seek(-1) # type: ignore
-                    self._player.stop(3)
-                    self._playbackStopped = False
+                    # Prefer history-based back if available (works in random mode)
+                    try:
+                        if hasattr(self._playlist, 'go_back') and self._playlist.go_back():
+                            self._player.stop(3)
+                            self._playbackStopped = False
+                        else:
+                            self._playlist.seek(-1) # type: ignore
+                            self._player.stop(3)
+                            self._playbackStopped = False
+                    except Exception:
+                        self._playlist.seek(-1) # type: ignore
+                        self._player.stop(3)
+                        self._playbackStopped = False
                 if event.key == pygame.K_o:
                     self._print("o was pressed. next chapter...")
                     self._player.sendKey("o")

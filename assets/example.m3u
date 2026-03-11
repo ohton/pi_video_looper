@@ -1,6 +1,14 @@
 #EXTM3U
+# Example playlist using relative paths and subdirectories
+# Demonstrates: relative file paths, subdirectory entries, and _repeat_Nx parsing
 #EXTINF:0,TitleForVideo1
 videoFile.mp4
 #EXTINF:0,Title2
 videoFile2.mp4
 videoFile3.mp4
+#EXTINF:0,Subdir Example
+subdir/videoFile4.mp4
+#EXTINF:0,Repeat example (from filename)
+subdir/videoFile5_repeat_2x.mp4
+#EXTINF:0,Include child playlist
+example_child.m3u

@@ -1,0 +1,7 @@
+#EXTM3U
+# Child playlist demonstrating nested relative paths and _repeat_Nx
+# Place this file in the same `assets/` folder — entries are relative to this file's directory.
+#EXTINF:0,Child Title 1
+childVideo_repeat_3x.mp4
+#EXTINF:0,Child Title 2
+childVideo2.mp4
