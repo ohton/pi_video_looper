@@ -4,6 +4,7 @@
 import random
 from os.path import basename, splitext
 from typing import Optional, Union
+from collections import deque
 
 random.seed()
 
@@ -55,6 +56,9 @@ class Playlist:
         self._movies = movies
         self._index = None
         self._next = None
+        # history stack of played movies to support 'back' in random mode
+        # bounded to avoid unbounded memory growth
+        self._history = deque(maxlen=100)
         self._is_random = is_random
         self._is_random_unique = is_random_unique
         self._resume = resume_playlist
@@ -69,9 +73,15 @@ class Playlist:
         
         # Check if next movie is set and jump directly there:
         if self._next is not None:
-            next=self._next
+            next = self._next
             self._next = None # reset next
-            self._index=self._movies.index(next)
+            # push previous to history if exists
+            if self._index is not None:
+                try:
+                    self._history.append(self._movies[self._index])
+                except Exception:
+                    pass
+            self._index = self._movies.index(next)
             return next
 
         # check if any movie is set to infinite repeats and return it
@@ -84,6 +94,12 @@ class Playlist:
 
         # Start Random movie
         if self._is_random:
+            # push previous to history if exists
+            if self._index is not None:
+                try:
+                    self._history.append(self._movies[self._index])
+                except Exception:
+                    pass
             self._index = self._movies.index(self._select_random_movie())
         else:
             # Start at the first movie or resume and increment through them in order.
@@ -102,6 +118,11 @@ class Playlist:
             # Wrap around to the start after finishing.
             if self._index >= self.length():
                 self._index = 0
+
+            # push previous to history if exists (sequential case)
+            # Note: when starting from None there is no previous
+            # so only push when _index was previously set (handled above for random)
+            # For sequential we pushed before incrementing index, so no extra action here.
 
         if self._resume:
             with open("playlist_index.txt","w") as f:
@@ -156,6 +177,19 @@ class Playlist:
     def clear_all_playcounts(self):
         for movie in self._movies:
             movie.clear_playcount()
+
+    def go_back(self) -> bool:
+        """Set the next movie to the last played movie from history.
+
+        Returns True if history had an entry and next was set, False otherwise.
+        """
+        if not hasattr(self, '_history') or len(self._history) == 0:
+            return False
+        prev = self._history.pop()
+        if prev in self._movies:
+            self._next = prev
+            return True
+        return False
     
     def __str__(self):
         if self._is_random:
