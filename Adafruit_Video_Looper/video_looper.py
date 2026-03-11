@@ -254,7 +254,21 @@ class VideoLooper:
                     path = urllib.parse.unquote(line.rstrip())
                     if not os.path.isabs(path):
                         path = os.path.join(playlist_dirname, path)
-                    movies.append(Movie(path, title))
+
+                    # Determine repeat setting from the filename (support _repeat_Nx like directory scanning)
+                    filename = os.path.basename(path)
+                    repeatsetting = re.search(r'_repeat_(-?)([0-9]*)x', filename, flags=re.IGNORECASE)
+                    if (repeatsetting is not None and repeatsetting.group(2) != ''):
+                        repeat = int(repeatsetting.group(1) + repeatsetting.group(2))
+                        moviename = os.path.splitext(re.sub(r'_repeat_(-?)([0-9]*)x', '', filename, flags=re.IGNORECASE))[0]
+                    else:
+                        repeat = 1
+                        moviename = os.path.splitext(filename)[0]
+
+                    # Use EXTINF title if provided, otherwise use the filename (without _repeat suffix)
+                    movie_title = title if title else moviename
+
+                    movies.append(Movie(path, movie_title, repeat))
                     title = None
 
         return Playlist(movies, self._is_random, self._is_random_unique, self._resume_playlist)
