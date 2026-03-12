@@ -96,6 +96,9 @@ class VideoLooper:
         self._player = self._load_player()
         self._reader = self._load_file_reader()
         self._playlist = None
+        # GPIO list-index tracking and lock for cycling through lists assigned to pins
+        self._gpio_list_index = {}
+        self._gpio_lock = threading.Lock()
         # Load ALSA hardware configuration.
         self._alsa_hw_device = parse_hw_device(self._config.get('alsa', 'hw_device'))
         self._alsa_hw_vol_control = self._config.get('alsa', 'hw_vol_control')
@@ -551,10 +554,41 @@ class VideoLooper:
         action = self._pinMap[str(pin)]
 
         self._print(f"pin {pin} triggered: {action}")
-        
+
+        # If the action is a list, treat it as a list of playlist paths to cycle through.
+        if isinstance(action, list):
+            try:
+                with self._gpio_lock:
+                    candidates = action
+                    # Determine current basename to find current index in candidates
+                    curr_basename = os.path.basename(self._playlist_path) if self._playlist_path else ''
+                    found_idx = None
+                    for i, cand in enumerate(candidates):
+                        try:
+                            if os.path.basename(cand) == curr_basename:
+                                found_idx = i
+                                break
+                        except Exception:
+                            continue
+                    if found_idx is None:
+                        next_idx = 0
+                    else:
+                        next_idx = (found_idx + 1) % len(candidates)
+                    self._gpio_list_index[str(pin)] = next_idx
+                    next_path = candidates[next_idx]
+                    # set playlist to the selected candidate and rebuild
+                    self._playlist_path = next_path
+                    self._playlist = self._build_playlist()
+                    self._player.stop(3)
+                    self._playbackStopped = False
+            except Exception:
+                self._print(f"Error handling gpio list action for pin {pin}")
+            return
+
+        # existing handling: keyboard-like actions, m3u path, or index/filename
         if action in ['K_ESCAPE', 'K_k', 'K_s', 'K_SPACE', 'K_p', 'K_b', 'K_o', 'K_i']:
             pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=getattr(pygame, action, None)))
-        elif ".m3u" in action:
+        elif isinstance(action, str) and ".m3u" in action:
             self._playlist_path = action
             self._playlist = self._build_playlist()
             self._player.stop(3)
