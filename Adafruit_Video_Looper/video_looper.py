@@ -696,6 +696,18 @@ class VideoLooper:
         """Shut down the program"""
         self._print("quitting Video Looper")
 
+        # Try to unmount any USB mounts created by the file reader's mounter
+        try:
+            if hasattr(self, '_reader') and getattr(self._reader, '_mounter', None) is not None:
+                self._print("unmounting USB drives created by file reader")
+                try:
+                    self._reader._mounter.remove_all()
+                except Exception as e:
+                    self._print(f"Error while unmounting USB drives: {e}")
+        except Exception:
+            # be defensive: do not fail shutdown if unmounting is not possible
+            pass
+
         if shutdown:
             os.system("sudo shutdown now")
 
