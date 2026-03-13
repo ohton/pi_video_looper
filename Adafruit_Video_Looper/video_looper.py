@@ -51,6 +51,8 @@ class VideoLooper:
         """
         # Load the configuration.
         self._config = configparser.ConfigParser()
+        # remember config path for possible restart
+        self._config_path = config_path
         if len(self._config.read(config_path)) == 0:
             raise RuntimeError(f"Failed to find configuration file at {config_path}, is the application properly installed?")
         self._console_output = self._config.getboolean('video_looper', 'console_output')
@@ -521,6 +523,12 @@ class VideoLooper:
                 if event.key == pygame.K_p:
                     self._print("p was pressed. shutting down...")
                     self.quit(True)
+                if event.key == pygame.K_r:
+                    self._print("r was pressed. restarting...")
+                    try:
+                        self.restart()
+                    except Exception:
+                        self._print("restart failed")
                 if event.key == pygame.K_b:
                     self._print("b was pressed. jumping back...")
                     # Prefer history-based back if available (works in random mode)
@@ -586,8 +594,11 @@ class VideoLooper:
             return
 
         # existing handling: keyboard-like actions, m3u path, or index/filename
-        if action in ['K_ESCAPE', 'K_k', 'K_s', 'K_SPACE', 'K_p', 'K_b', 'K_o', 'K_i']:
-            pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=getattr(pygame, action, None)))
+        if action in ['K_ESCAPE', 'K_k', 'K_s', 'K_SPACE', 'K_p', 'K_b', 'K_o', 'K_i', 'K_r']:
+            try:
+                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=getattr(pygame, action, None)))
+            except Exception as e:
+                self._print(f"failed to post event for {action}: {e}")
         elif isinstance(action, str) and ".m3u" in action:
             self._playlist_path = action
             self._playlist = self._build_playlist()
@@ -726,6 +737,53 @@ class VideoLooper:
         """Shut down the program, meant to by called by signal handler."""
         self._print("received signal to quit")
         self.quit()
+
+    def restart(self):
+        """Restart the program in-place by execv-ing a new Python process.
+
+        This performs graceful cleanup similar to `quit()` and then replaces
+        the current process with a fresh invocation of the module using the
+        same config path.
+        """
+        self._print("restarting Video Looper")
+
+        # Stop playback loop and player
+        try:
+            self._playbackStopped = True
+            self._running = False
+            if self._player is not None:
+                self._player.stop()
+        except Exception:
+            pass
+
+        # GPIO cleanup
+        try:
+            if self._pinMap:
+                GPIO.cleanup()
+        except Exception:
+            pass
+
+        # Unmount USB drives if possible
+        try:
+            if hasattr(self, '_reader') and getattr(self._reader, '_mounter', None) is not None:
+                self._print("unmounting USB drives created by file reader (restart)")
+                try:
+                    self._reader._mounter.remove_all()
+                except Exception as e:
+                    self._print(f"Error while unmounting USB drives during restart: {e}")
+        except Exception:
+            pass
+
+        # Quit pygame and execv the same module with the same config
+        try:
+            pygame.quit()
+        except Exception:
+            pass
+
+        try:
+            os.execv(sys.executable, [sys.executable, "-m", "Adafruit_Video_Looper.video_looper", self._config_path])
+        except Exception as e:
+            self._print(f"Failed to restart via execv: {e}")
 
 # Main entry point.
 if __name__ == '__main__':
