@@ -14,6 +14,7 @@ import urllib.parse
 import pygame
 import json
 import threading
+import shutil
 from datetime import datetime
 import RPi.GPIO as GPIO
 
@@ -524,11 +525,33 @@ class VideoLooper:
                     self._print("p was pressed. shutting down...")
                     self.quit(True)
                 if event.key == pygame.K_r:
-                    self._print("r was pressed. restarting...")
+                    self._print("r was pressed. restarting (via supervisor)...")
                     try:
-                        self.restart()
-                    except Exception:
-                        self._print("restart failed")
+                        # Try to ask supervisor to restart this managed program so
+                        # the stop->start sequence is identical to a manual
+                        # "supervisorctl restart".
+                        # Prefer using sudo+full path so typical supervisor
+                        # setups work; fall back to which('supervisorctl').
+                        if shutil.which('sudo') and shutil.which('supervisorctl'):
+                            cmd = [shutil.which('sudo'), shutil.which('supervisorctl'), 'restart', 'video_looper']
+                        elif shutil.which('supervisorctl'):
+                            cmd = [shutil.which('supervisorctl'), 'restart', 'video_looper']
+                        else:
+                            cmd = None
+
+                        if cmd is not None:
+                            # Spawn and do not wait — supervisor will perform the
+                            # actual stop/start and terminate this process.
+                            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        else:
+                            # Fallback to internal restart if supervisorctl not available
+                            self._print('supervisorctl not found, falling back to internal restart')
+                            try:
+                                self.restart()
+                            except Exception:
+                                self._print('restart failed')
+                    except Exception as e:
+                        self._print(f"supervisor restart failed: {e}")
                 if event.key == pygame.K_b:
                     self._print("b was pressed. jumping back...")
                     # Prefer history-based back if available (works in random mode)
