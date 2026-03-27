@@ -780,21 +780,21 @@ class VideoLooper:
         except Exception:
             pass
 
+        # Try to replace the current process image with a fresh one. Use
+        # execvpe to pass the current environment which can help in managed
+        # environments (supervisor) where execv sometimes fails due to PATH
+        # or interpreter resolution differences.
         try:
-            os.execv(sys.executable, [sys.executable, "-m", "Adafruit_Video_Looper.video_looper", self._config_path])
+            os.execvpe(sys.executable, [sys.executable, "-m", "Adafruit_Video_Looper.video_looper", self._config_path], os.environ)
         except Exception as e:
-            self._print(f"Failed to restart via execv: {e}")
-            # Fallback: try spawning a new process and exit current process so
-            # supervisor (or whichever manager) sees the original process stop
-            # and the new one running. This helps when execv fails under some
-            # managed environments.
+            # If exec fails, log and exit non-zero so supervisor can handle restart.
+            self._print(f"Failed to restart via execvpe: {e}")
             try:
-                self._print("Attempting to spawn new process via subprocess.Popen")
-                subprocess.Popen([sys.executable, "-m", "Adafruit_Video_Looper.video_looper", self._config_path], env=os.environ)
-                self._print("Spawned new process, exiting current process")
-                os._exit(0)
-            except Exception as e2:
-                self._print(f"Failed to spawn new process: {e2}")
+                # Small sleep to allow logs to flush
+                time.sleep(0.1)
+            except Exception:
+                pass
+            os._exit(1)
 
 # Main entry point.
 if __name__ == '__main__':
