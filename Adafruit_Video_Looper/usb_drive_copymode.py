@@ -22,7 +22,8 @@ class USBDriveReaderCopy(object):
         self._load_config(config)
         self._pygame_init(config)
         self._mounter = USBDriveMounter(root=self._mount_path,
-                                        readonly=self._readonly)
+                        readonly=self._readonly,
+                        mount_options=getattr(self, '_mount_options', ''))
         self._mounter.start_monitor()
 
         if not os.path.exists(self._target_path):
@@ -53,6 +54,10 @@ class USBDriveReaderCopy(object):
     def _load_config(self, config):
         self._mount_path = config.get('usb_drive', 'mount_path')
         self._readonly = config.getboolean('usb_drive', 'readonly')
+        try:
+            self._mount_options = config.get('usb_drive', 'mount_options')
+        except Exception:
+            self._mount_options = ''
         self._target_path = config.get('directory', 'path')
         self._copy_mode = config.get('copymode', 'mode')
         self._copyloader = config.getboolean('copymode', 'copyloader')

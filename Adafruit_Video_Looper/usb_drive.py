@@ -15,13 +15,20 @@ class USBDriveReader:
         """
         self._load_config(config)
         self._mounter = USBDriveMounter(root=self._mount_path,
-                                        readonly=self._readonly)
+                        readonly=self._readonly,
+                        mount_options=getattr(self, '_mount_options', ''))
         self._mounter.start_monitor()
 
 
     def _load_config(self, config):
         self._mount_path = config.get('usb_drive', 'mount_path')
         self._readonly = config.getboolean('usb_drive', 'readonly')
+        # Optional mount options passed through to the mount command.
+        # Example: "codepage=932,iocharset=utf8,uid=pi,gid=pi"
+        try:
+            self._mount_options = config.get('usb_drive', 'mount_options')
+        except Exception:
+            self._mount_options = ''
 
     def search_paths(self):
         """Return a list of paths to search for files. Will return a list of all

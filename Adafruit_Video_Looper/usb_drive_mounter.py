@@ -11,7 +11,7 @@ import pyudev
 class USBDriveMounter:
     """Service for automatically mounting attached USB drives."""
 
-    def __init__(self, root='/mnt/usbdrive', readonly=True):
+    def __init__(self, root='/mnt/usbdrive', readonly=True, mount_options=''):
         """Create an instance of the USB drive mounter service.  Root is an
         optional parameter which specifies the location and file name prefix for
         mounted drives (a number will be appended to each mounted drive file
@@ -20,6 +20,9 @@ class USBDriveMounter:
         """
         self._root = root
         self._readonly = readonly
+        # Additional mount options string passed to `mount -o <options>`.
+        # Example: "codepage=932,iocharset=utf8,uid=pi,gid=pi"
+        self._mount_options = mount_options
         self._context = pyudev.Context()
 
     def remove_all(self):
@@ -43,6 +46,9 @@ class USBDriveMounter:
             args = ['mount']
             if self._readonly:
                 args.append('-r')
+            # If explicit mount options are configured, pass them with -o
+            if self._mount_options:
+                args.extend(['-o', self._mount_options])
             args.extend([node, path])
             subprocess.check_call(args)
 
