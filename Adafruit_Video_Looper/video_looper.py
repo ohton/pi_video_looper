@@ -784,6 +784,17 @@ class VideoLooper:
             os.execv(sys.executable, [sys.executable, "-m", "Adafruit_Video_Looper.video_looper", self._config_path])
         except Exception as e:
             self._print(f"Failed to restart via execv: {e}")
+            # Fallback: try spawning a new process and exit current process so
+            # supervisor (or whichever manager) sees the original process stop
+            # and the new one running. This helps when execv fails under some
+            # managed environments.
+            try:
+                self._print("Attempting to spawn new process via subprocess.Popen")
+                subprocess.Popen([sys.executable, "-m", "Adafruit_Video_Looper.video_looper", self._config_path], env=os.environ)
+                self._print("Spawned new process, exiting current process")
+                os._exit(0)
+            except Exception as e2:
+                self._print(f"Failed to spawn new process: {e2}")
 
 # Main entry point.
 if __name__ == '__main__':
